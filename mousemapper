@@ -1,25 +1,29 @@
 #!/bin/bash
 
-keyboard=$(libinput list-devices | grep keyboard -B4 | grep -E "keyboard $" -B4 | grep -o '/dev/input/event[1-9]*')
-keyboard=$(libinput list-devices |grep Keyboard$ -A1 |grep -o '/dev/input/event[1-9]*' |head -1)
+DEBUG=0
+
+#keyboard=$(libinput list-devices | grep keyboard -B4 | grep -E "keyboard $" -B4 | grep -o '/dev/input/event[1-9]*')
+keyboard=$(libinput list-devices |grep Keyboard$ -A1 |grep -o '/dev/input/event[1-9]*' |tail -1)
 event_type=EV_KEY
 action_type=POINTER_BUTTON
-axis_type=POINTER_AXIS
+#axis_type=POINTER_AXIS
+axis_type=POINTER_SCROLL_WHEEL
 pressed="pressed,"
 
-readarray -t devices <<<$(libinput list-devices | grep pointer -B4 | grep -o '/dev/input/event[0-9]*')
+#readarray -t devices <<<$(libinput list-devices | grep pointer -B4 | grep -o '/dev/input/event[0-9]*')
+devices=( "/dev/input/by-id/usb-Logitech_USB_Receiver-if02-event-mouse" )
 
 # COMMANDS MAP
 #BTN_EXTRA=(KEY_LEFTMETA KEY_PAGEUP)
 #BTN_SIDE=(KEY_LEFTMETA KEY_PAGEDOWN)
-LEFT_AXIS=(KEY_LEFTMETA KEY_PAGEUP)
-RIGHT_AXIS=(KEY_LEFTMETA KEY_PAGEDOWN)
+LEFT_AXIS=(KEY_LEFTCTRL KEY_LEFTALT KEY_LEFT)
+RIGHT_AXIS=(KEY_LEFTCTRL KEY_LEFTALT KEY_RIGHT)
 
 function pressKey(){
     device=$1; key=$2; value=$3
-    echo "pressing ${key} ${value}"
+    [ $DEBUG -ne 0 ] && echo "pressing ${key} ${value}"
     evemu-event ${keyboard} --sync --type ${event_type} --code ${key} --value ${value};
-    echo evemu-event ${keyboard} --sync --type ${event_type} --code ${key} --value ${value};
+    [ $DEBUG -ne 0 ] && echo evemu-event ${keyboard} --sync --type ${event_type} --code ${key} --value ${value};
 }
 
 function pressCommand(){
@@ -43,10 +47,11 @@ function parseEventLine(){
     action=$2
     button=$4
     movement=$6
-    axis=${7%.*}
+    axis=${7%%\.*}
 
     # compute only if right action
     if [ ${action} = ${axis_type} ]; then
+	[ $DEBUG -ne 0 ] && echo axis: ${axis}
         if [ ${axis} -eq -15 ]; then
           button=LEFT_AXIS
         elif [ ${axis} -eq 15 ]; then
@@ -54,10 +59,10 @@ function parseEventLine(){
         fi
         pressCommand ${device} ${button} $pressed
         pressCommand ${device} ${button} 0
-        echo axis: pressCommand ${device} ${button} ${movement}
+        [ $DEBUG -ne 0 ] && echo axis: pressCommand ${device} ${button} ${movement}
     elif [ ${action} = ${action_type} ]; then
         pressCommand ${device} ${button} ${movement}
-        echo pressCommand ${device} ${button} ${movement}
+        [ $DEBUG -ne 0 ] && echo pressCommand ${device} ${button} ${movement}
     fi
 }
 
@@ -65,7 +70,7 @@ function mapDevice(){
     device=$1
     while read line; do
         parseEventLine ${line}
-        echo ${line}
+        [ $DEBUG -ne 0 ] && echo ${line}
     done < <(stdbuf -oL libinput debug-events --device ${device} & )
 }
 
